@@ -12,7 +12,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
     name="pgantomizer",
     version='0.0.1',
-    description="Anonymize data in your PostgreSQL dabatase with ease.",
+    description="Anonymize data in your PostgreSQL dababase with ease.",
     long_description=long_description,
     author='Oskar Hollmann',
     author_email='oskar@hollmann.me',
