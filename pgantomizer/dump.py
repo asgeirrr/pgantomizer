@@ -7,7 +7,7 @@ import sys
 import yaml
 
 
-def dump_db(schema_path, dump_path, *db_args):
+def dump_db(dump_path, schema_path, *db_args):
     schema = yaml.load(open(schema_path))
     cmd = 'pg_dump -Fc -Z 9 {args} {tables} -f {filename}'.format(
         args='-d {} -U {} -h {} -p {} '.format(
@@ -25,7 +25,8 @@ def main():
                                                  'for later anonymization.',
                                      epilog='Compressed Postgres format is used. See README.md for details.')
     parser.add_argument('-v', '--verbose', action='store_true', help='increase output verbosity')
-    parser.add_argument('--schema',  help='YAML config file with tables to dump', default='./schema.yaml')
+    parser.add_argument('--schema',  help='YAML config file with tables to dump', default='./schema.yaml',
+                        required=True)
     parser.add_argument('--dump-file',  help='path to the file where to dump the DB', default='to_anonymize.sql')
     parser.add_argument('--db-name',  help='name of the database to dump')
     parser.add_argument('--user', help='name of the Postgres user with access to the database')
@@ -42,8 +43,8 @@ def main():
         sys.exit('File with schema "{}" does not exist.'.format(args.schema))
 
     dump_db(
-        args.schema,
         args.dump_file,
+        args.schema,
         *([args.db_name, args.user, args.host, args.port]
           if args.db_name and args.user else [])
     )

@@ -33,10 +33,11 @@ setup(
     keywords='postgres anonymization dump',
     install_requires=[
         'psycopg2>=2.6.1',
+        'pyyaml>=3.12',
     ],
     entry_points={
         'console_scripts': [
-            'pgantomizer_dump=pgantomizer.dump_db:main',
+            'pgantomizer_dump=pgantomizer.dump:main',
             'pgantomizer=pgantomizer.anonymize:main'
         ]
     }
