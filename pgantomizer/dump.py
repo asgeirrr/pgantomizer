@@ -7,9 +7,10 @@ import sys
 import yaml
 
 
-def dump_db(dump_path, schema_path, *db_args):
+def dump_db(dump_path, schema_path, password='', *db_args):
     schema = yaml.load(open(schema_path))
-    cmd = 'pg_dump -Fc -Z 9 {args} {tables} -f {filename}'.format(
+    cmd = 'PGPASSWORD={password} pg_dump -Fc -Z 9 {args} {tables} -f {filename}'.format(
+        password=password or os.environ.get('DB_DEFAULT_PASS', ''),
         args='-d {} -U {} -h {} -p {} '.format(
             *(db_args or [os.environ.get(var) for var in ['DB_DEFAULT_NAME', 'DB_DEFAULT_USER',
                                                           'DB_DEFAULT_SERVICE', 'DB_DEFAULT_PORT']])),
@@ -45,6 +46,7 @@ def main():
     dump_db(
         args.dump_file,
         args.schema,
+        args.password,
         *([args.db_name, args.user, args.host, args.port]
           if args.db_name and args.user else [])
     )
