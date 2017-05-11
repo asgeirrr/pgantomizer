@@ -51,6 +51,9 @@ def drop_schema(db_args):
 
 
 def load_db_to_new_instance(filename, db_args):
+    if not os.path.isfile(filename):
+        raise IOError('Dump file {}'.format(filename))
+    os.putenv('PGPASSWORD', db_args.get('password'))
     drop_schema(db_args)
     subprocess.run(
         'PGPASSWORD={password} pg_restore -Fc -j 8 {db_args} {filename} {redirect}'.format(
@@ -75,7 +78,7 @@ def prepare_column_for_anonymization(conn, cursor, table, column, data_type):
     conn.commit()
 
 
-def check_schema(cursor, schema):
+def check_schema(cursor, schema, db_args):
     for table in schema:
         try:
             cursor.execute("SELECT {columns} FROM {table};".format(
@@ -84,7 +87,7 @@ def check_schema(cursor, schema):
             ))
         except psycopg2.ProgrammingError:
             logging.warning('Some of the columns specified in the schema do not exist in the dump.')
-            drop_schema()
+            drop_schema(db_args)
             raise
 
 
@@ -106,7 +109,7 @@ def anonymize_column(cursor, schema, table, column, data_type):
 def anonymize_db(schema, db_args):
     with psycopg2.connect(**db_args) as conn:
         with conn.cursor() as cursor:
-            check_schema(cursor, schema)
+            check_schema(cursor, schema, db_args)
             cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
             for table_name in cursor.fetchall():
                 cursor.execute("SELECT column_name, data_type FROM information_schema.columns "
