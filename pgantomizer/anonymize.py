@@ -20,12 +20,17 @@ ANONYMIZE_DATA_TYPE = {
     'numeric': 'floor(random() * 10)',
     'character varying': lambda column, pk_name: "'{}_' || {}".format(column, pk_name),
     'text': lambda column, pk_name: "'{}_' || {}".format(column, pk_name),
+    'inet': "'111.111.111.111'"
 }
 
 
 DB_ARG_NAMES = ('dbname', 'user', 'password', 'host', 'port')
 DB_ENV_NAMES = ('ANONYMIZED_DB_NAME', 'ANONYMIZED_DB_USER', 'ANONYMIZED_DB_PASS', 'ANONYMIZED_DB_HOST',
                 'ANONYMIZED_DB_PORT')
+
+
+class MissingAnonymizationRuleError(Exception):
+    pass
 
 
 def get_table_pk_name(schema, table):
@@ -103,7 +108,7 @@ def anonymize_column(cursor, schema, table, column, data_type):
         ))
         logging.debug('Anonymized {}.{}'.format(table, column))
     else:
-        logging.warning('No rule to anonymize type "{}"'.format(data_type))
+        raise MissingAnonymizationRuleError('No rule to anonymize type "{}"'.format(data_type))
 
 
 def anonymize_db(schema, db_args):
@@ -116,7 +121,11 @@ def anonymize_db(schema, db_args):
                                "WHERE table_schema = 'public' AND table_name = '{}'".format(table_name[0]))
                 for column_name, data_type in cursor.fetchall():
                     prepare_column_for_anonymization(conn, cursor, table_name[0], column_name, data_type)
-                    anonymize_column(cursor, schema, table_name[0], column_name, data_type)
+                    try:
+                        anonymize_column(cursor, schema, table_name[0], column_name, data_type)
+                    except MissingAnonymizationRuleError:
+                        drop_schema(db_args)
+                        raise
 
 
 def load_anonymize_remove(dump_file, schema, leave_dump=False, db_args=None):
