@@ -8,6 +8,8 @@ import psycopg2
 
 import yaml
 
+from .utils import get_in
+
 
 DEFAULT_PK_COLUMN_NAME = 'id'
 
@@ -21,6 +23,10 @@ ANONYMIZE_DATA_TYPE = {
     'character varying': lambda column, pk_name: "'{}_' || {}".format(column, pk_name),
     'text': lambda column, pk_name: "'{}_' || {}".format(column, pk_name),
     'inet': "'111.111.111.111'"
+}
+
+CUSTOM_ANONYMIZATION_RULES = {
+    'aggregate_length': lambda column, _: 'length({})'.format(column)
 }
 
 
@@ -100,7 +106,8 @@ def anonymize_column(cursor, schema, table, column, data_type):
     if column == 'id' or (schema[table] and column in schema[table].get('raw', [])):
         logging.debug('Skipping anonymization of {}.{}'.format(table, column))
     elif data_type in ANONYMIZE_DATA_TYPE:
-        anonymization = ANONYMIZE_DATA_TYPE[data_type]
+        custom_rule = get_in(schema, [table, 'custom_rules', column])
+        anonymization = CUSTOM_ANONYMIZATION_RULES[custom_rule] if custom_rule else ANONYMIZE_DATA_TYPE[data_type]
         cursor.execute("UPDATE {table} SET {column} = {value};".format(
             table=table,
             column=column,

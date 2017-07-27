@@ -1,7 +1,7 @@
 pgantomizer
 ===========
 
-Anonymize data in your PostgreSQL dababase with ease. Anonymization is handy if you need to provide  data to
+Anonymize data in your PostgreSQL dababase with ease. Anonymization is handy if you need to provide data to
 people that should not have access to the personal information of the users.
 Importing the data to third-party tools where you cannot guarantee what will happen to the data is also a common use case.
 
@@ -25,6 +25,14 @@ A sample YAML schema can be examined below.
         pk: user_ptr_id
     customeraddress:
         raw: [country, customer_id]
+        custom_rules:
+            zip_code: aggregate_length
+
+Sometimes it is needed to use a different anonymization function for a particular column.
+It can be specified in the `custom_rules` directive (see example above).
+There is a limited set of functions you can choose from. So far
+
+* **aggregate_length** - replaces content of the column with its length (can be used on any type that supports length function)
 
 
 Calling pgantomizer from the Command Line
