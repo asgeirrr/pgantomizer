@@ -1,0 +1,3 @@
+customer:
+    raw: [language, address]
+    pk: customer_id

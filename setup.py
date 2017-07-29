@@ -35,6 +35,11 @@ setup(
         'psycopg2>=2.6.1',
         'pyyaml>=3.12',
     ],
+    setup_requires=['pytest-runner'],
+    tests_require=[
+        'pytest',
+        'pytest-postgresql==1.3.0',
+    ],
     entry_points={
         'console_scripts': [
             'pgantomizer_dump=pgantomizer.dump:main',

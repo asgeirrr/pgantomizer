@@ -1,0 +1,7 @@
+customer:
+    raw: [language, currency]
+    pk: customer_id
+customer_address:
+    raw: [country, customer_id]
+    custom_rules:
+        address_line: aggregate_length

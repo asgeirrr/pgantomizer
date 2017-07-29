@@ -13,20 +13,12 @@ The rules for anonynimization are written in a single YAML file.
 Columns that should be left in the raw form without anonymization must be explicitly marked in the schema.
 This ensures that adding the new column in the DB without thinking about its sensitivity does not leak the data.
 The default name of the primary key is `id` but a custom one can be specified form the table in the schema.
+Primary key is NOT anonymized by default.
 
 A sample YAML schema can be examined below.
 
-.. code-block:: yaml
-
-    user:
-        raw: []
-    customer:
-        raw: [user_ptr_id, language, currency, citizenship]
-        pk: user_ptr_id
-    customeraddress:
-        raw: [country, customer_id]
-        custom_rules:
-            zip_code: aggregate_length
+.. include:: example_schema.yaml
+    :code: yaml
 
 Sometimes it is needed to use a different anonymization function for a particular column.
 It can be specified in the `custom_rules` directive (see example above).

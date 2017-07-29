@@ -35,7 +35,15 @@ DB_ENV_NAMES = ('ANONYMIZED_DB_NAME', 'ANONYMIZED_DB_USER', 'ANONYMIZED_DB_PASS'
                 'ANONYMIZED_DB_PORT')
 
 
-class MissingAnonymizationRuleError(Exception):
+class PgantomizerError(Exception):
+    pass
+
+
+class MissingAnonymizationRuleError(PgantomizerError):
+    pass
+
+
+class InvalidAnonymizationSchemaError(PgantomizerError):
     pass
 
 
@@ -63,7 +71,7 @@ def drop_schema(db_args):
 
 def load_db_to_new_instance(filename, db_args):
     if not os.path.isfile(filename):
-        raise IOError('Dump file {}'.format(filename))
+        raise IOError('Dump file {} is not a file.'.format(filename))
     os.putenv('PGPASSWORD', db_args.get('password'))
     drop_schema(db_args)
     subprocess.run(
@@ -96,17 +104,17 @@ def check_schema(cursor, schema, db_args):
                 columns='"{}"'.format('", "'.join(schema[table].get('raw', []) + [get_table_pk_name(schema, table)])),
                 table=table
             ))
-        except psycopg2.ProgrammingError:
-            logging.warning('Some of the columns specified in the schema do not exist in the dump.')
-            drop_schema(db_args)
-            raise
+        except psycopg2.ProgrammingError as e:
+            raise InvalidAnonymizationSchemaError(str(e))
 
 
 def anonymize_column(cursor, schema, table, column, data_type):
-    if column == 'id' or (schema[table] and column in schema[table].get('raw', [])):
+    if column == get_table_pk_name(schema, table) or (schema[table] and column in schema[table].get('raw', [])):
         logging.debug('Skipping anonymization of {}.{}'.format(table, column))
     elif data_type in ANONYMIZE_DATA_TYPE:
         custom_rule = get_in(schema, [table, 'custom_rules', column])
+        if custom_rule and custom_rule not in CUSTOM_ANONYMIZATION_RULES:
+            raise MissingAnonymizationRuleError('Custom rule "{}" is not defined'.format(custom_rule))
         anonymization = CUSTOM_ANONYMIZATION_RULES[custom_rule] if custom_rule else ANONYMIZE_DATA_TYPE[data_type]
         cursor.execute("UPDATE {table} SET {column} = {value};".format(
             table=table,
@@ -128,20 +136,21 @@ def anonymize_db(schema, db_args):
                                "WHERE table_schema = 'public' AND table_name = '{}'".format(table_name[0]))
                 for column_name, data_type in cursor.fetchall():
                     prepare_column_for_anonymization(conn, cursor, table_name[0], column_name, data_type)
-                    try:
-                        anonymize_column(cursor, schema, table_name[0], column_name, data_type)
-                    except MissingAnonymizationRuleError:
-                        drop_schema(db_args)
-                        raise
+                    anonymize_column(cursor, schema, table_name[0], column_name, data_type)
 
 
 def load_anonymize_remove(dump_file, schema, leave_dump=False, db_args=None):
     schema = yaml.load(open(schema))
     db_args = db_args or get_db_args_from_env()
-    load_db_to_new_instance(dump_file, db_args)
-    if not leave_dump:
-        subprocess.run(['rm', dump_file])
-    anonymize_db(schema, db_args)
+    try:
+        load_db_to_new_instance(dump_file, db_args)
+        anonymize_db(schema, db_args)
+    except Exception:  # Any exception must result into droping the schema to prevent sensitive data leakage
+        drop_schema(db_args)
+        raise
+    finally:
+        if not leave_dump:
+            subprocess.run(['rm', dump_file])
 
 
 def main():
