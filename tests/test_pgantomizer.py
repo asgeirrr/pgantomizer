@@ -2,11 +2,11 @@ import os
 import subprocess
 
 import pytest
+from pytest_postgresql import factories
 
 from pgantomizer.anonymize import (InvalidAnonymizationSchemaError, MissingAnonymizationRuleError,
                                    load_anonymize_remove, load_db_to_new_instance)
 from pgantomizer.dump import dump_db
-from pytest_postgresql import factories
 
 from .asserts import assert_db_anonymized, assert_db_empty
 

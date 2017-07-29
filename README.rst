@@ -1,6 +1,12 @@
 pgantomizer
 ===========
 
+.. image:: https://travis-ci.org/asgeirrr/pgantomizer.svg?branch=master
+    :target: https://travis-ci.org/asgeirrr/pgantomizer
+
+.. image:: https://img.shields.io/badge/License-BSD%203--Clause-blue.svg
+    :target: https://github.com/asgeirrr/pgantomizer/blob/master/LICENSE
+
 Anonymize data in your PostgreSQL dababase with ease. Anonymization is handy if you need to provide data to
 people that should not have access to the personal information of the users.
 Importing the data to third-party tools where you cannot guarantee what will happen to the data is also a common use case.
@@ -17,8 +23,15 @@ Primary key is NOT anonymized by default.
 
 A sample YAML schema can be examined below.
 
-.. include:: example_schema.yaml
-    :code: yaml
+.. code:: yaml
+
+    customer:
+        raw: [language, currency]
+        pk: customer_id
+    customer_address:
+        raw: [country, customer_id]
+        custom_rules:
+            address_line: aggregate_length
 
 Sometimes it is needed to use a different anonymization function for a particular column.
 It can be specified in the `custom_rules` directive (see example above).
@@ -51,6 +64,5 @@ all database-related arguments can be supplied as environmental variables.
 TODO
 ----
 * expand this README
-* add automated tests (TravisCI)
 * submit package automatically to PyPI
 * add --dry-run argument that will check the schema and output the operations to be performed

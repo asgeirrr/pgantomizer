@@ -7,6 +7,11 @@ python:
 services:
     - postgresql
 
-install: python setup.py -q install
+install:
+    - python setup.py -q install
+    - pip install coverage coveralls
 
-script: python setup.py test
+script: coverage run --rcfile=.coveragerc setup.py test
+
+after_success:
+    - coveralls
