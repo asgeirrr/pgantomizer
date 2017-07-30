@@ -1,5 +1,6 @@
 import os
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 from pytest_postgresql import factories
@@ -7,6 +8,8 @@ from pytest_postgresql import factories
 from pgantomizer.anonymize import (InvalidAnonymizationSchemaError, MissingAnonymizationRuleError,
                                    load_anonymize_remove, load_db_to_new_instance)
 from pgantomizer.dump import dump_db
+from pgantomizer.dump import main as dump_main
+from pgantomizer.anonymize import main as anonymize_main
 
 from .asserts import assert_db_anonymized, assert_db_empty
 
@@ -81,6 +84,14 @@ def test_invalid_custom_rule_raises_exception(dumped_db, anonymized):
     assert_db_empty(anonymized)
 
 
+def test_missing_anonymization_rule_raises_exception(original_db, anonymized):
+    dump_db(DUMP_PATH, 'tests/missing_anonymization_rule.yaml', '', *DUMP_DB_ARGS)
+    with pytest.raises(MissingAnonymizationRuleError):
+        load_anonymize_remove(DUMP_PATH, 'tests/missing_anonymization_rule.yaml', leave_dump=False,
+                              db_args=ANONYMIZED_DB_ARGS)
+    assert_db_empty(anonymized)
+
+
 def test_schema_column_missing_in_db_raises_exception(dumped_db, anonymized):
     with pytest.raises(InvalidAnonymizationSchemaError):
         load_anonymize_remove(DUMP_PATH, 'tests/missing_column.yaml', leave_dump=False, db_args=ANONYMIZED_DB_ARGS)
@@ -92,16 +103,23 @@ def test_missing_schema_raises_exception(dumped_db, anonymized):
         load_anonymize_remove(DUMP_PATH, 'invalid_path.yaml', leave_dump=False, db_args=ANONYMIZED_DB_ARGS)
 
 
-def test_command_line_invokation(dumped_db, anonymized):
-    subprocess.run('pgantomizer_dump --schema={} --dump-file={} --password={} --db-name={} --user={} --host={} '
-                   '--port={}'.format(SCHEMA_PATH, DUMP_PATH, '', *DUMP_DB_ARGS), shell=True)
-    assert os.path.getsize(DUMP_PATH) > 2000
+def test_command_line_invokation(original_db, anonymized, monkeypatch):
+    monkeypatch.setattr('argparse.ArgumentParser.parse_args', lambda self: SimpleNamespace(
+        verbose=False,
+        schema=SCHEMA_PATH,
+        dump_file=DUMP_PATH,
+        **{arg: ORIGINAL_DB_ARGS[arg] for arg in ('dbname', 'user', 'host', 'port', 'password')}
+    ))
+    dump_main()
 
+    assert os.path.getsize(DUMP_PATH) > 2000
     assert_db_empty(anonymized)
-    subprocess.run('pgantomizer --schema={} --dump-file={} --password={} --db-name={} --user={} --host={} '
-                   '--port={}'.format(
-                       SCHEMA_PATH,
-                       DUMP_PATH,
-                       *[ANONYMIZED_DB_ARGS[arg] for arg in ('password', 'dbname', 'user', 'host', 'port')]
-                   ), shell=True)
+    monkeypatch.setattr('argparse.ArgumentParser.parse_args', lambda self: SimpleNamespace(
+        verbose=False,
+        leave_dump=False,
+        schema=SCHEMA_PATH,
+        dump_file=DUMP_PATH,
+        **{arg: ANONYMIZED_DB_ARGS[arg] for arg in ('dbname', 'user', 'host', 'port', 'password')}
+    ))
+    anonymize_main()
     assert_db_anonymized(anonymized)

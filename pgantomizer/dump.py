@@ -31,7 +31,7 @@ def main():
     parser.add_argument('--schema',  help='YAML config file with tables to dump', default='./schema.yaml',
                         required=True)
     parser.add_argument('--dump-file',  help='path to the file where to dump the DB', default='to_anonymize.sql')
-    parser.add_argument('--db-name',  help='name of the database to dump')
+    parser.add_argument('--dbname',  help='name of the database to dump')
     parser.add_argument('--user', help='name of the Postgres user with access to the database')
     parser.add_argument('--password', help='password of the Postgres user with access to the database', default='')
     parser.add_argument('--host', help='host where the DB is running', default='localhost')
@@ -49,8 +49,8 @@ def main():
         args.dump_file,
         args.schema,
         args.password,
-        *([args.db_name, args.user, args.host, args.port]
-          if args.db_name and args.user else [])
+        *([args.dbname, args.user, args.host, args.port]
+          if args.dbname and args.user else [])
     )
 
 if __name__ == '__main__':

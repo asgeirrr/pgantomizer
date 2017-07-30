@@ -164,7 +164,7 @@ def main():
                         default='./schema.yaml')
     parser.add_argument('-f', '--dump-file',  help='path to the dump of DB to load and anonymize',
                         default='to_anonymize.sql')
-    parser.add_argument('--db-name',  help='name of the database to dump')
+    parser.add_argument('--dbname',  help='name of the database to dump')
     parser.add_argument('--user', help='name of the Postgres user with access to the anonymized database')
     parser.add_argument('--password', help='password of the Postgres user with access to the anonymized database',
                         default='')
@@ -183,9 +183,9 @@ def main():
     if not os.path.isfile(args.schema):
         sys.exit('File with schema "{}" does not exist.'.format(args.schema))
 
-    db_args = ({name: value for name, value in zip(DB_ARG_NAMES, (args.db_name, args.user, args.password, args.host,
+    db_args = ({name: value for name, value in zip(DB_ARG_NAMES, (args.dbname, args.user, args.password, args.host,
                                                                   args.port))}
-               if args.db_name and args.user else None)
+               if args.dbname and args.user else None)
 
     load_anonymize_remove(args.dump_file, args.schema, args.leave_dump, db_args)
 
