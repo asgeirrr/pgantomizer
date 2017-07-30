@@ -15,3 +15,11 @@ script: coverage run --rcfile=.coveragerc setup.py test
 
 after_success:
     - coveralls
+
+deploy:
+    provider: pypi
+    on:
+        tags: true
+    user: asgeirrr
+    password:
+        secure: CeGqHVVgctUlkbB3RzG8bPoumf587ZE/RwVnaJENgVsVYXfzG9cYIR04uufQQ6Ds5gxQe/VZhtZHIJfLGaMjEz8elQL5aGsGoxaZw3ZkOlnbGjBlWx+Ja8EV7/fmgEILagdMcPBazZ9koMaWtZ3BIfm/m0jsM/xEdE+/RSDrg819Q9ElByp97T/xlKcWaUmOtQN1o8FnRaC1rgQpOYJlS7lOMakIlfvjbIYduriAQNhw03cY1fFDncV7flGi9GeCBoIg96QHRSM9ACTqgbeNhNDszUp2jf+WK5n4A5Rlf3olgc3hozYd2cuDvyXaCCeQXfVWd77dgyqjQGz9AwZdQW6b4hn5TAY3FDIogaW4QUY6fb10P5eetjcNiU6vaVznH/ALdnk+ghPjfqabosEA8JlxKBLc3IHpoEMiyFXFBgfUBeekMl7x5T2sY4Iwnj2k3uKdd8CP43bqtMTBlxfYDJg7cWaVoAp2M47OeX52E9q0XVIa9zx2Pwm5buCGDtR9KfJPwyo7CnSiCAnWiWhSE1icBPxeTQJZjb0DiENZmUXABln7gJyzKFWl4I+DVkMmDay+vdcKwbrgbKwKmW+Q+/l0BjMePcf9jcR25flOgEk3W2F2ISERw0DcufXN7+AU0RHnb/HeHmivPO92Ipad9nzQPQNeysu7/ufivgU7uRo=

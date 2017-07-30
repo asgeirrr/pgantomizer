@@ -4,6 +4,9 @@ pgantomizer
 .. image:: https://travis-ci.org/asgeirrr/pgantomizer.svg?branch=master
     :target: https://travis-ci.org/asgeirrr/pgantomizer
 
+.. image:: https://coveralls.io/repos/github/asgeirrr/pgantomizer/badge.svg?branch=master
+    :target: https://coveralls.io/github/asgeirrr/pgantomizer
+
 .. image:: https://img.shields.io/badge/License-BSD%203--Clause-blue.svg
     :target: https://github.com/asgeirrr/pgantomizer/blob/master/LICENSE
 
