@@ -10,6 +10,9 @@ pgantomizer
 .. image:: https://img.shields.io/badge/License-BSD%203--Clause-blue.svg
     :target: https://github.com/asgeirrr/pgantomizer/blob/master/LICENSE
 
+.. image:: https://badge.fury.io/py/pgantomizer.svg
+    :target: https://badge.fury.io/py/pgantomizer
+
 Anonymize data in your PostgreSQL dababase with ease. Anonymization is handy if you need to provide data to
 people that should not have access to the personal information of the users.
 Importing the data to third-party tools where you cannot guarantee what will happen to the data is also a common use case.
