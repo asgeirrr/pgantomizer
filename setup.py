@@ -11,7 +11,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name="pgantomizer",
-    version='0.0.6',
+    version='0.6.0',
     description="Anonymize data in your PostgreSQL dababase with ease.",
     long_description=long_description,
     author='Oskar Hollmann',
@@ -22,8 +22,8 @@ setup(
     include_package_data=True,
     packages=find_packages(),
     classifiers=[
-        'Development Status :: 3 - Alpha',
-        'Framework :: Django',
+        'Development Status :: 4 - Beta',
+        'Environment :: Console',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
@@ -33,7 +33,7 @@ setup(
     keywords='postgres anonymization dump',
     install_requires=[
         'psycopg2>=2.6.1',
-        'pyyaml>=3.12',
+        'pyyaml>=3.11',
     ],
     setup_requires=[
         'pytest-runner',
