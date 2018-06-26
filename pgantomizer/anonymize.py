@@ -99,9 +99,12 @@ def prepare_column_for_anonymization(conn, cursor, table, column, data_type):
 
 def check_schema(cursor, schema, db_args):
     for table in schema:
+        pk_column = get_table_pk_name(schema, table)
+        raw_columns = schema[table].get('raw', [])
+        columns_to_process = raw_columns + [pk_column] if pk_column else raw_columns
         try:
             cursor.execute("SELECT {columns} FROM {table};".format(
-                columns='"{}"'.format('", "'.join(schema[table].get('raw', []) + [get_table_pk_name(schema, table)])),
+                columns='"{}"'.format('", "'.join(columns_to_process)),
                 table=table
             ))
         except psycopg2.ProgrammingError as e:
