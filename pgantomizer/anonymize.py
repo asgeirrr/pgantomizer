@@ -26,7 +26,11 @@ ANONYMIZE_DATA_TYPE = {
 }
 
 CUSTOM_ANONYMIZATION_RULES = {
-    'aggregate_length': lambda column, _: 'length({})'.format(column)
+    'aggregate_length': lambda column, pk_name: 'length({})'.format(column),
+    'x_out': lambda column, pk_name: "translate({}, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZC0123456789', 'xxxxxxxxxxxxxxxxxxxxxxxxxxXXKXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')".format(column),
+    'example_email': lambda column, pk_name: "{} || '@example.com'".format(pk_name),
+    'md5': lambda column, pk_name: "MD5({})".format(column),
+    'clear': NULL_ANONYMIZE
 }
 
 
@@ -120,11 +124,13 @@ def anonymize_column(cursor, schema, table, column, data_type):
         if custom_rule and custom_rule not in CUSTOM_ANONYMIZATION_RULES:
             raise MissingAnonymizationRuleError('Custom rule "{}" is not defined'.format(custom_rule))
         anonymization = CUSTOM_ANONYMIZATION_RULES[custom_rule] if custom_rule else ANONYMIZE_DATA_TYPE[data_type]
-        cursor.execute("UPDATE {table} SET {column} = {value};".format(
+        update_statement = "UPDATE {table} SET {column} = {value};".format(
             table=table,
             column=column,
             value=anonymization(column, get_table_pk_name(schema, table)) if callable(anonymization) else anonymization
-        ))
+        )
+        # logging.debug(update_statement)
+        cursor.execute(update_statement)
         logging.debug('Anonymized {}.{}'.format(table, column))
     else:
         raise MissingAnonymizationRuleError('No rule to anonymize type "{}"'.format(data_type))
