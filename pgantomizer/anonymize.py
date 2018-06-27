@@ -130,7 +130,7 @@ def anonymize_column(cursor, schema, table, column, data_type):
         raise MissingAnonymizationRuleError('No rule to anonymize type "{}"'.format(data_type))
 
 
-def anonymize_db(schema, db_args):
+def anonymize_db(schema, db_args, disable_schema_changes):
     with psycopg2.connect(**db_args) as conn:
         with conn.cursor() as cursor:
             check_schema(cursor, schema, db_args)
@@ -139,21 +139,22 @@ def anonymize_db(schema, db_args):
                 cursor.execute("SELECT column_name, data_type FROM information_schema.columns "
                                "WHERE table_schema = 'public' AND table_name = '{}'".format(table_name[0]))
                 for column_name, data_type in cursor.fetchall():
-                    prepare_column_for_anonymization(conn, cursor, table_name[0], column_name, data_type)
+                    if not disable_schema_changes:
+                        prepare_column_for_anonymization(conn, cursor, table_name[0], column_name, data_type)
                     anonymize_column(cursor, schema, table_name[0], column_name, data_type)
 
 
-def load_anonymize_remove(dump_file, schema, skip_restore=False, leave_dump=False, db_args=None):
+def load_anonymize_remove(dump_file, schema, skip_restore=False, disable_schema_changes=False, leave_dump=False, db_args=None):
     schema = yaml.load(open(schema))
     db_args = db_args or get_db_args_from_env()
 
     if skip_restore:
         logging.debug('Skipping restore process and using existing schema')
-        anonymize_db(schema, db_args)
+        anonymize_db(schema, db_args, disable_schema_changes)
     else:
         try:
             load_db_to_new_instance(dump_file, db_args)
-            anonymize_db(schema, db_args)
+            anonymize_db(schema, db_args, disable_schema_changes)
         except Exception: # Any exception must result into droping the schema to prevent sensitive data leakage
             drop_schema(db_args)
             raise
@@ -169,6 +170,7 @@ def main():
                                             'prior to loading the dump and anonymization. See README.md for details.')
     parser.add_argument('-v', '--verbose', action='count', help='increase output verbosity')
     parser.add_argument('-s', '--skip-restore', action='store_true', help='skips the restore process entirely, relying on existing DB')
+    parser.add_argument('-d', '--disable-schema-changes', action='store_true', help='bypasses any column preparation that would affect schema definition')
     parser.add_argument('-l', '--leave-dump', action='store_true', help='do not delete dump file after anonymization')
     parser.add_argument('--schema',  help='YAML config file with anonymization rules for all tables', required=True,
                         default='./schema.yaml')
@@ -197,7 +199,7 @@ def main():
                                                                   args.port))}
                if args.dbname and args.user else None)
 
-    load_anonymize_remove(args.dump_file, args.schema, args.skip_restore, args.leave_dump, db_args)
+    load_anonymize_remove(args.dump_file, args.schema, args.skip_restore, args.disable_schema_changes, args.leave_dump, db_args)
 
 
 if __name__ == '__main__':
