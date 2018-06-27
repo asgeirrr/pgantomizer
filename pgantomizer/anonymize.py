@@ -13,6 +13,8 @@ from .utils import get_in
 
 DEFAULT_PK_COLUMN_NAME = 'id'
 
+NULL_ANONYMIZE = lambda column, pk_name: 'NULL'
+
 ANONYMIZE_DATA_TYPE = {
     'timestamp with time zone': "'1111-11-11 11:11:11.111111+00'",
     'date': "'1111-11-11'",
@@ -22,7 +24,9 @@ ANONYMIZE_DATA_TYPE = {
     'numeric': 'floor(random() * 10)',
     'character varying': lambda column, pk_name: "'{}_' || {}".format(column, pk_name),
     'text': lambda column, pk_name: "'{}_' || {}".format(column, pk_name),
-    'inet': "'111.111.111.111'"
+    'inet': "'111.111.111.111'",
+    'json': "'{}'",
+    'tsvector': NULL_ANONYMIZE
 }
 
 CUSTOM_ANONYMIZATION_RULES = {
@@ -106,48 +110,76 @@ def check_schema(cursor, schema, db_args):
         logging.debug('Checking definition for table {}'.format(table))
         pk_column = get_table_pk_name(schema, table)
         raw_columns = schema[table].get('raw', [])
-        columns_to_process = raw_columns + [pk_column] if pk_column else raw_columns
+        custom_rule_columns = list(schema[table].get('custom_rules', {}).keys())
+        columns_to_validate = raw_columns + custom_rule_columns
+        if pk_column is not None:
+            columns_to_validate.append(pk_column)
         try:
             cursor.execute("SELECT {columns} FROM {table} LIMIT 1;".format(
-                columns='"{}"'.format('", "'.join(columns_to_process)),
+                columns='"{}"'.format('", "'.join(columns_to_validate)),
                 table=table
             ))
         except psycopg2.ProgrammingError as e:
             raise InvalidAnonymizationSchemaError(str(e))
 
 
-def anonymize_column(cursor, schema, table, column, data_type):
+def get_column_update(schema, table, column, data_type):
+
+    custom_rule = get_in(schema, [table, 'custom_rules', column])
+
     if column == get_table_pk_name(schema, table) or (schema[table] and column in schema[table].get('raw', [])):
-        logging.debug('Skipping anonymization of {}.{}'.format(table, column))
-    elif data_type in ANONYMIZE_DATA_TYPE:
-        custom_rule = get_in(schema, [table, 'custom_rules', column])
+        return None
+    elif data_type in ANONYMIZE_DATA_TYPE or custom_rule is not None:
         if custom_rule and custom_rule not in CUSTOM_ANONYMIZATION_RULES:
             raise MissingAnonymizationRuleError('Custom rule "{}" is not defined'.format(custom_rule))
         anonymization = CUSTOM_ANONYMIZATION_RULES[custom_rule] if custom_rule else ANONYMIZE_DATA_TYPE[data_type]
-        update_statement = "UPDATE {table} SET {column} = {value};".format(
-            table=table,
+        return "{column} = {value}".format(
             column=column,
             value=anonymization(column, get_table_pk_name(schema, table)) if callable(anonymization) else anonymization
         )
-        # logging.debug(update_statement)
-        cursor.execute(update_statement)
-        logging.debug('Anonymized {}.{}'.format(table, column))
     else:
-        raise MissingAnonymizationRuleError('No rule to anonymize type "{}"'.format(data_type))
+        raise MissingAnonymizationRuleError('No rule to anonymize type "{}" for column "{}"'.format(data_type, column))
+
+
+def anonymize_table(conn, cursor, schema, table, disable_schema_changes):
+
+    logging.debug('Processing "{}" table'.format(table))
+
+    cursor.execute("SELECT column_name, data_type FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = '{}'".format(table))
+
+    # Generate list of column_update SQL snippets for UPDATE
+    column_updates = []
+    updated_column_names = []
+    for column_name, data_type in cursor.fetchall():
+        if not disable_schema_changes: # Bypass schema changes if explicitly requested
+            prepare_column_for_anonymization(conn, cursor, table, column_name, data_type)
+        column_update = get_column_update(schema, table, column_name, data_type)
+        if column_update is not None:
+            column_updates.append(column_update)
+            updated_column_names.append(column_name)
+
+    # Process UPDATE if any column_updates requested
+    if len(column_updates) > 0:
+
+        update_statement = "UPDATE {table} SET {column_updates_sql}".format(
+            table=table,
+            column_updates_sql=", ".join(column_updates)
+        )
+        logging.debug('Running UPDATE on {} for columns {} ...'.format(table, ", ".join(updated_column_names)))
+        cursor.execute(update_statement)
+    else:
+        logging.debug('Nothing to anonymize for {}'.format(table))
 
 
 def anonymize_db(schema, db_args, disable_schema_changes):
     with psycopg2.connect(**db_args) as conn:
         with conn.cursor() as cursor:
             check_schema(cursor, schema, db_args)
-            cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+            cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type <> 'VIEW' ORDER BY table_name;")
             for table_name in cursor.fetchall():
-                cursor.execute("SELECT column_name, data_type FROM information_schema.columns "
-                               "WHERE table_schema = 'public' AND table_name = '{}'".format(table_name[0]))
-                for column_name, data_type in cursor.fetchall():
-                    if not disable_schema_changes:
-                        prepare_column_for_anonymization(conn, cursor, table_name[0], column_name, data_type)
-                    anonymize_column(cursor, schema, table_name[0], column_name, data_type)
+                anonymize_table(conn, cursor, schema, table_name[0], disable_schema_changes)
+            logging.debug('Anonymization complete!')
 
 
 def load_anonymize_remove(dump_file, schema, skip_restore=False, disable_schema_changes=False, leave_dump=False, db_args=None):
@@ -170,6 +202,7 @@ def load_anonymize_remove(dump_file, schema, skip_restore=False, disable_schema_
 
 
 def main():
+
     parser = argparse.ArgumentParser(description='Load data from a Postgres dump to a specified instance '
                                                  'and anonymize it according to rules specified in a YAML config file.',
                                      epilog='Beware that all tables in the target DB are dropped '
