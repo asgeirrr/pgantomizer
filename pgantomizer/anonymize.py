@@ -99,11 +99,12 @@ def prepare_column_for_anonymization(conn, cursor, table, column, data_type):
 
 def check_schema(cursor, schema, db_args):
     for table in schema:
+        logging.debug('Checking definition for table {}'.format(table))
         pk_column = get_table_pk_name(schema, table)
         raw_columns = schema[table].get('raw', [])
         columns_to_process = raw_columns + [pk_column] if pk_column else raw_columns
         try:
-            cursor.execute("SELECT {columns} FROM {table};".format(
+            cursor.execute("SELECT {columns} FROM {table} LIMIT 1;".format(
                 columns='"{}"'.format('", "'.join(columns_to_process)),
                 table=table
             ))
