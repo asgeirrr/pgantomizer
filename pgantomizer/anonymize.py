@@ -129,7 +129,7 @@ def check_schema(cursor, schema, db_args):
 
 def get_column_update(schema, table, column, data_type):
 
-    custom_rule = get_in(schema, [table, 'custom_rules', column])
+    custom_rule = get_in(schema, [table, 'custom_rules', column]) if schema[table] else None
 
     if column == get_table_pk_name(schema, table) or (schema[table] and column in schema[table].get('raw', [])):
         return None
@@ -150,7 +150,7 @@ def anonymize_table(conn, cursor, schema, table, disable_schema_changes):
     logging.debug('Processing "{}" table'.format(table))
 
     # Truncate and return if desired
-    if schema[table].get('truncate', False) == True:
+    if schema[table] and schema[table].get('truncate', False) == True:
         logging.debug('Running TRUNCATE on {} ...'.format(table))
         cursor.execute('TRUNCATE {}'.format(table))
         return
@@ -170,10 +170,10 @@ def anonymize_table(conn, cursor, schema, table, disable_schema_changes):
 
     # Process UPDATE if any column_updates requested
     if len(column_updates) > 0:
-
-        update_statement = "UPDATE {table} SET {column_updates_sql}".format(
+        update_statement = "UPDATE {table} SET {column_updates_sql} {where_clause}".format(
             table=table,
-            column_updates_sql=", ".join(column_updates)
+            column_updates_sql=", ".join(column_updates),
+            where_clause="WHERE {}".format(schema[table].get('where', 'TRUE') if schema[table] else 'TRUE')
         )
         logging.debug('Running UPDATE on {} for columns {} ...'.format(table, ", ".join(updated_column_names)))
         cursor.execute(update_statement)
