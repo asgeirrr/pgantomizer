@@ -23,10 +23,18 @@ Anonymization Process
 ---------------------
 
 The rules for anonynimization are written in a single YAML file.
+
 Columns that should be left in the raw form without anonymization must be explicitly marked in the schema.
 This ensures that adding the new column in the DB without thinking about its sensitivity does not leak the data.
+
 The default name of the primary key is `id` but a custom one can be specified form the table in the schema.
-Primary key is NOT anonymized by default.
+If the table has no primary key, you may specify `~` or `null` explicitly. Primary key is NOT anonymized by default.
+
+If you wish do bypass anonymization and truncate a specific table, you can do so by passing `truncate: true`.
+
+You can limit the scope of the anonymization pass by providing a `where` clause. This is useful for retaining
+internal data as appropriate.
+
 
 A sample YAML schema can be examined below.
 
@@ -35,16 +43,35 @@ A sample YAML schema can be examined below.
     customer:
         raw: [language, currency]
         pk: customer_id
+        custom_rules:
+            email: example_email,
+            bio: x_out,
+            auth_hash: clear,
+            another_uniq_id: md5,
+            phone_number:
+                value: '+15555555555'
+        where: "email <> 'me@my-company.com'"
+
     customer_address:
         raw: [country, customer_id]
+        pk: ~
         custom_rules:
             address_line: aggregate_length
 
+    customer_transactions:
+        truncate: true
+
 Sometimes it is needed to use a different anonymization function for a particular column.
 It can be specified in the `custom_rules` directive (see example above).
-There is a limited set of functions you can choose from. So far
+There is a limited set of functions you can choose from. So far:
 
 * **aggregate_length** - replaces content of the column with its length (can be used on any type that supports length function)
+* **clear** - simply nulls out the value (whatever DB constraints still apply)
+* **example_email** - replaces the value with an `@example.com` based on the primary key value
+* **md5** - alternative to default TEXT handling, useful for creating variance aside default handling while also guaranteeing value uniqueness
+* **x_out** - converts a string alpha-numeric characters to X's, retaining length
+
+Additionally, you can provide a nested value with a `value` key to assign values directly.
 
 
 Calling pgantomizer from the Command Line
@@ -68,10 +95,11 @@ The script is able to take the DB connection details from environmental variable
 following the conventions of running Django in Docker. The presumed variable names are:
 `DB_DEFAULT_NAME`, `DB_DEFAULT_USER`, `DB_DEFAULT_PASS`, `DB_DEFAULT_SERVICE`, `DB_DEFAULT_PORT`.
 
-**pgantomizer** is the main script that loads the Postgre dump into a specified instance. Then all columns
+By default, the main script, **pgantomizer** loads the Postgre dump into a specified instance. Then all columns
 except primary keys and the ones specified in the schema as `raw` are anonymized according to their data type.
 Finally, the dump file is deleted by default to reduce risk of leakage of unanonymized data.
 The connection details of the Postgres instance where the anonymized data should be loaded can be passed as arguments
+
 
 .. code:: bash
 
@@ -79,6 +107,9 @@ The connection details of the Postgres instance where the anonymized data should
 
 or through environmental variables with following names:
 `ANONYMIZED_DB_NAME`, `ANONYMIZED_DB_USER`, `ANONYMIZED_DB_PASS`, `ANONYMIZED_DB_HOST`, `ANONYMIZED_DB_PORT`.
+
+Note: If you wish to anonymize a source that has been previously restored using other means, you may do so by passing the `--skip-restore` (`-s`) flag to pgantomizer.
+In this mode pgantomizer will not try to enforce any dump file requirements and will connect directly to the target server for anonymization without any schema reconstruction.
 
 
 Calling pgantomizer from Python
