@@ -134,7 +134,15 @@ def get_column_update(schema, table, column, data_type):
     if column == get_table_pk_name(schema, table) or (schema[table] and column in schema[table].get('raw', [])):
         return None
     elif data_type in ANONYMIZE_DATA_TYPE or custom_rule is not None:
-        if custom_rule and custom_rule not in CUSTOM_ANONYMIZATION_RULES:
+        if custom_rule and type(custom_rule) is dict and 'value' in custom_rule:
+            if custom_rule['value'] is None:
+                raise MissingAnonymizationRuleError('Custom rule "{}" must provide a non-None value'.format(custom_rule))
+            else:
+                return "{column} = '{value}'".format(
+                    column=column,
+                    value=custom_rule['value']
+                )
+        elif custom_rule and custom_rule not in CUSTOM_ANONYMIZATION_RULES:
             raise MissingAnonymizationRuleError('Custom rule "{}" is not defined'.format(custom_rule))
         anonymization = CUSTOM_ANONYMIZATION_RULES[custom_rule] if custom_rule else ANONYMIZE_DATA_TYPE[data_type]
         return "{column} = {value}".format(
