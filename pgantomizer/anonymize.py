@@ -140,7 +140,7 @@ def anonymize_db(schema, db_args):
 
 
 def load_anonymize_remove(dump_file, schema, leave_dump=False, db_args=None):
-    schema = yaml.load(open(schema))
+    schema = yaml.load(open(schema), Loader=yaml.FullLoader)
     db_args = db_args or get_db_args_from_env()
     try:
         load_db_to_new_instance(dump_file, db_args)
