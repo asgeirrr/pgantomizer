@@ -10,6 +10,8 @@ import yaml
 
 from .utils import get_in
 
+import re
+
 
 DEFAULT_PK_COLUMN_NAME = 'id'
 
@@ -31,7 +33,7 @@ ANONYMIZE_DATA_TYPE = {
 
 CUSTOM_ANONYMIZATION_RULES = {
     'aggregate_length': lambda column, pk_name: 'length({})'.format(column),
-    'x_out': lambda column, pk_name: "translate({}, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZC0123456789', 'xxxxxxxxxxxxxxxxxxxxxxxxxxXXKXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')".format(column),
+    'x_out': lambda column, pk_name: "regexp_replace({}, '\S', 'x', 'g')".format(column),
     'example_email': lambda column, pk_name: "{} || '@example.com'".format(pk_name),
     'md5': lambda column, pk_name: "MD5({})".format(column),
     'clear': NULL_ANONYMIZE
