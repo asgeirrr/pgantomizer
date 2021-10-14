@@ -137,7 +137,7 @@ that will help you do that with a little extra work of parsing the YAML schema.
 
     from pgantomizer import anonymize_db
 
-    anonymize_db(yaml.load(open('anonymization_schema.yaml')), {
+    anonymize_db(yaml.load(open('anonymization_schema.yaml'), Loader=yaml.FullLoader), {
         'dbname': 'anonymized_postgres',
         'user': 'alaric',
         'password': 'anonymized_pass',
