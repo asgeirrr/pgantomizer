@@ -111,8 +111,11 @@ def check_schema(cursor, schema, db_args):
     for table in schema:
         logging.debug('Checking definition for table {}'.format(table))
 
-        if schema[table].get('truncate', False) == True:
-            continue
+        if schema[table].get('truncate', False) != False:
+            if schema[table]['truncate'] in [True, 'cascade']:
+                continue
+            else:
+                raise InvalidAnonymizationSchemaError("Invalid value for `truncate`: {}".format(schema[table]['truncate']))
 
         pk_column = get_table_pk_name(schema, table)
         raw_columns = schema[table].get('raw', [])
@@ -160,9 +163,13 @@ def anonymize_table(conn, cursor, schema, table, disable_schema_changes):
     logging.debug('Processing "{}" table'.format(table))
 
     # Truncate and return if desired
-    if schema[table] and schema[table].get('truncate', False) == True:
-        logging.debug('Running TRUNCATE on {} ...'.format(table))
-        cursor.execute('TRUNCATE {}'.format(table))
+    if schema[table] and schema[table].get('truncate', False) != False:
+        cascade = ''
+        if schema[table]['truncate'] == 'cascade':
+            cascade = ' CASCADE'
+
+        logging.debug('Running TRUNCATE{cascade} on {table} ...'.format(table=table, cascade=cascade))
+        cursor.execute('TRUNCATE {table} {cascade}'.format(table=table, cascade=cascade))
         return
 
     # Generate list of column_update SQL snippets for UPDATE
@@ -212,7 +219,7 @@ def load_anonymize_remove(dump_file, schema, skip_restore=False, disable_schema_
         try:
             load_db_to_new_instance(dump_file, db_args)
             anonymize_db(schema, db_args, disable_schema_changes)
-        except Exception: # Any exception must result into droping the schema to prevent sensitive data leakage
+        except Exception: # Any exception must result into dropping the schema to prevent sensitive data leakage
             drop_schema(db_args)
             raise
         finally:

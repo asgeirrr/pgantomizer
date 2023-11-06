@@ -13,7 +13,7 @@ pgantomizer
 .. image:: https://badge.fury.io/py/pgantomizer.svg
     :target: https://badge.fury.io/py/pgantomizer
 
-Anonymize data in your PostgreSQL dababase with ease. Anonymization is handy if you need to provide data to
+Anonymize data in your PostgreSQL database with ease. Anonymization is handy if you need to provide data to
 people that should not have access to the personal information of the users.
 Importing the data to third-party tools where you cannot guarantee what will happen to the data is also a common use case.
 This tool will come in handy when GDPR will take effect in EU-countries.
@@ -22,7 +22,7 @@ This tool will come in handy when GDPR will take effect in EU-countries.
 Anonymization Process
 ---------------------
 
-The rules for anonynimization are written in a single YAML file.
+The rules for anonymization are written in a single YAML file.
 
 Columns that should be left in the raw form without anonymization must be explicitly marked in the schema.
 This ensures that adding the new column in the DB without thinking about its sensitivity does not leak the data.
@@ -31,6 +31,10 @@ The default name of the primary key is `id` but a custom one can be specified fo
 If the table has no primary key, you may specify `~` or `null` explicitly. Primary key is NOT anonymized by default.
 
 If you wish do bypass anonymization and truncate a specific table, you can do so by passing `truncate: true`.
+
+If the table you wish to truncate is referenced by foreign keys, consider using `truncate: cascade`, but beware
+that this option will cause PostgreSQL to silently and automatically truncate any other tables that reference this
+table via foreign key constraints.  Use with care!
 
 You can limit the scope of the anonymization pass by providing a `where` clause. This is useful for retaining
 internal data as appropriate.
