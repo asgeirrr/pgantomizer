@@ -8,7 +8,7 @@ import yaml
 
 
 def dump_db(dump_path, schema_path, password='', *db_args):
-    schema = yaml.load(open(schema_path))
+    schema = yaml.load(open(schema_path), Loader=yaml.FullLoader)
     password = password or os.environ.get('DB_DEFAULT_PASS', '')
     os.putenv('PGPASSWORD', password)
     cmd = 'PGPASSWORD={password} pg_dump -Fc -Z 9 {args} {tables} -f {filename}'.format(

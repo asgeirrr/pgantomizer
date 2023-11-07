@@ -10,8 +10,12 @@ import yaml
 
 from .utils import get_in
 
+import re
+
 
 DEFAULT_PK_COLUMN_NAME = 'id'
+
+NULL_ANONYMIZE = lambda column, pk_name: 'NULL'
 
 ANONYMIZE_DATA_TYPE = {
     'timestamp with time zone': "'1111-11-11 11:11:11.111111+00'",
@@ -22,11 +26,17 @@ ANONYMIZE_DATA_TYPE = {
     'numeric': 'floor(random() * 10)',
     'character varying': lambda column, pk_name: "'{}_' || {}".format(column, pk_name),
     'text': lambda column, pk_name: "'{}_' || {}".format(column, pk_name),
-    'inet': "'111.111.111.111'"
+    'inet': "'111.111.111.111'",
+    'json': "'{}'",
+    'tsvector': NULL_ANONYMIZE
 }
 
 CUSTOM_ANONYMIZATION_RULES = {
-    'aggregate_length': lambda column, _: 'length({})'.format(column)
+    'aggregate_length': lambda column, pk_name: 'length({})'.format(column),
+    'x_out': lambda column, pk_name: "regexp_replace({}, '\S', 'x', 'g')".format(column),
+    'example_email': lambda column, pk_name: "{} || '@example.com'".format(pk_name),
+    'md5': lambda column, pk_name: "MD5({})".format(column),
+    'clear': NULL_ANONYMIZE
 }
 
 
@@ -99,66 +109,133 @@ def prepare_column_for_anonymization(conn, cursor, table, column, data_type):
 
 def check_schema(cursor, schema, db_args):
     for table in schema:
+        logging.debug('Checking definition for table {}'.format(table))
+
+        if schema[table].get('truncate', False) != False:
+            if schema[table]['truncate'] in [True, 'cascade']:
+                continue
+            else:
+                raise InvalidAnonymizationSchemaError("Invalid value for `truncate`: {}".format(schema[table]['truncate']))
+
+        pk_column = get_table_pk_name(schema, table)
+        raw_columns = schema[table].get('raw', [])
+        custom_rule_columns = list(schema[table].get('custom_rules', {}).keys())
+        columns_to_validate = raw_columns + custom_rule_columns
+        if pk_column is not None:
+            columns_to_validate.append(pk_column)
         try:
-            cursor.execute("SELECT {columns} FROM {table};".format(
-                columns='"{}"'.format('", "'.join(schema[table].get('raw', []) + [get_table_pk_name(schema, table)])),
+            cursor.execute("SELECT {columns} FROM {table} LIMIT 1;".format(
+                columns='"{}"'.format('", "'.join(columns_to_validate)),
                 table=table
             ))
         except psycopg2.ProgrammingError as e:
             raise InvalidAnonymizationSchemaError(str(e))
 
 
-def anonymize_column(cursor, schema, table, column, data_type):
+def get_column_update(schema, table, column, data_type):
+
+    custom_rule = get_in(schema, [table, 'custom_rules', column]) if schema[table] else None
+
     if column == get_table_pk_name(schema, table) or (schema[table] and column in schema[table].get('raw', [])):
-        logging.debug('Skipping anonymization of {}.{}'.format(table, column))
-    elif data_type in ANONYMIZE_DATA_TYPE:
-        custom_rule = get_in(schema, [table, 'custom_rules', column])
-        if custom_rule and custom_rule not in CUSTOM_ANONYMIZATION_RULES:
+        return None
+    elif data_type in ANONYMIZE_DATA_TYPE or custom_rule is not None:
+        if custom_rule and type(custom_rule) is dict and 'value' in custom_rule:
+            if custom_rule['value'] is None:
+                raise MissingAnonymizationRuleError('Custom rule "{}" must provide a non-None value'.format(custom_rule))
+            else:
+                return "{column} = '{value}'".format(
+                    column=column,
+                    value=custom_rule['value']
+                )
+        elif custom_rule and custom_rule not in CUSTOM_ANONYMIZATION_RULES:
             raise MissingAnonymizationRuleError('Custom rule "{}" is not defined'.format(custom_rule))
         anonymization = CUSTOM_ANONYMIZATION_RULES[custom_rule] if custom_rule else ANONYMIZE_DATA_TYPE[data_type]
-        cursor.execute("UPDATE {table} SET {column} = {value};".format(
-            table=table,
+        return "{column} = {value}".format(
             column=column,
             value=anonymization(column, get_table_pk_name(schema, table)) if callable(anonymization) else anonymization
-        ))
-        logging.debug('Anonymized {}.{}'.format(table, column))
+        )
     else:
-        raise MissingAnonymizationRuleError('No rule to anonymize type "{}"'.format(data_type))
+        raise MissingAnonymizationRuleError('No rule to anonymize type "{}" for column "{}"'.format(data_type, column))
 
 
-def anonymize_db(schema, db_args):
+def anonymize_table(conn, cursor, schema, table, disable_schema_changes):
+
+    logging.debug('Processing "{}" table'.format(table))
+
+    # Truncate and return if desired
+    if schema[table] and schema[table].get('truncate', False) != False:
+        cascade = ''
+        if schema[table]['truncate'] == 'cascade':
+            cascade = ' CASCADE'
+
+        logging.debug('Running TRUNCATE{cascade} on {table} ...'.format(table=table, cascade=cascade))
+        cursor.execute('TRUNCATE {table} {cascade}'.format(table=table, cascade=cascade))
+        return
+
+    # Generate list of column_update SQL snippets for UPDATE
+    cursor.execute("SELECT column_name, data_type FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = '{}'".format(table))
+    column_updates = []
+    updated_column_names = []
+    for column_name, data_type in cursor.fetchall():
+        if not disable_schema_changes: # Bypass schema changes if explicitly requested
+            prepare_column_for_anonymization(conn, cursor, table, column_name, data_type)
+        column_update = get_column_update(schema, table, column_name, data_type)
+        if column_update is not None:
+            column_updates.append(column_update)
+            updated_column_names.append(column_name)
+
+    # Process UPDATE if any column_updates requested
+    if len(column_updates) > 0:
+        update_statement = "UPDATE {table} SET {column_updates_sql} {where_clause}".format(
+            table=table,
+            column_updates_sql=", ".join(column_updates),
+            where_clause="WHERE {}".format(schema[table].get('where', 'TRUE') if schema[table] else 'TRUE')
+        )
+        logging.debug('Running UPDATE on {} for columns {} ...'.format(table, ", ".join(updated_column_names)))
+        cursor.execute(update_statement)
+    else:
+        logging.debug('Nothing to anonymize for {}'.format(table))
+
+
+def anonymize_db(schema, db_args, disable_schema_changes):
     with psycopg2.connect(**db_args) as conn:
         with conn.cursor() as cursor:
             check_schema(cursor, schema, db_args)
-            cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+            cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type <> 'VIEW' ORDER BY table_name;")
             for table_name in cursor.fetchall():
-                cursor.execute("SELECT column_name, data_type FROM information_schema.columns "
-                               "WHERE table_schema = 'public' AND table_name = '{}'".format(table_name[0]))
-                for column_name, data_type in cursor.fetchall():
-                    prepare_column_for_anonymization(conn, cursor, table_name[0], column_name, data_type)
-                    anonymize_column(cursor, schema, table_name[0], column_name, data_type)
+                anonymize_table(conn, cursor, schema, table_name[0], disable_schema_changes)
+            logging.debug('Anonymization complete!')
 
 
-def load_anonymize_remove(dump_file, schema, leave_dump=False, db_args=None):
-    schema = yaml.load(open(schema))
+def load_anonymize_remove(dump_file, schema, skip_restore=False, disable_schema_changes=False, leave_dump=False, db_args=None):
+    schema = yaml.load(open(schema), Loader=yaml.FullLoader)
     db_args = db_args or get_db_args_from_env()
-    try:
-        load_db_to_new_instance(dump_file, db_args)
-        anonymize_db(schema, db_args)
-    except Exception:  # Any exception must result into droping the schema to prevent sensitive data leakage
-        drop_schema(db_args)
-        raise
-    finally:
-        if not leave_dump:
-            subprocess.run(['rm', dump_file])
+
+    if skip_restore:
+        logging.debug('Skipping restore process and using existing schema')
+        anonymize_db(schema, db_args, disable_schema_changes)
+    else:
+        try:
+            load_db_to_new_instance(dump_file, db_args)
+            anonymize_db(schema, db_args, disable_schema_changes)
+        except Exception: # Any exception must result into dropping the schema to prevent sensitive data leakage
+            drop_schema(db_args)
+            raise
+        finally:
+            if not leave_dump:
+                subprocess.run(['rm', dump_file])
 
 
 def main():
+
     parser = argparse.ArgumentParser(description='Load data from a Postgres dump to a specified instance '
                                                  'and anonymize it according to rules specified in a YAML config file.',
                                      epilog='Beware that all tables in the target DB are dropped '
                                             'prior to loading the dump and anonymization. See README.md for details.')
     parser.add_argument('-v', '--verbose', action='count', help='increase output verbosity')
+    parser.add_argument('-s', '--skip-restore', action='store_true', help='skips the restore process entirely, relying on existing DB')
+    parser.add_argument('-d', '--disable-schema-changes', action='store_true', help='bypasses any column preparation that would affect schema definition')
     parser.add_argument('-l', '--leave-dump', action='store_true', help='do not delete dump file after anonymization')
     parser.add_argument('--schema',  help='YAML config file with anonymization rules for all tables', required=True,
                         default='./schema.yaml')
@@ -177,7 +254,7 @@ def main():
     else:
         logging.basicConfig(format="%(levelname)s: %(message)s")
 
-    if not os.path.isfile(args.dump_file):
+    if not args.skip_restore and not os.path.isfile(args.dump_file):
         sys.exit('File with dump "{}" does not exist.'.format(args.dump_file))
 
     if not os.path.isfile(args.schema):
@@ -187,7 +264,7 @@ def main():
                                                                   args.port))}
                if args.dbname and args.user else None)
 
-    load_anonymize_remove(args.dump_file, args.schema, args.leave_dump, db_args)
+    load_anonymize_remove(args.dump_file, args.schema, args.skip_restore, args.disable_schema_changes, args.leave_dump, db_args)
 
 
 if __name__ == '__main__':
