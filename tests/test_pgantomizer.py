@@ -17,7 +17,7 @@ from pgantomizer.anonymize import main as anonymize_main
 from .asserts import assert_db_anonymized, assert_db_empty
 
 
-anonymized_proc = factories.postgresql_proc(port="8765", logsdir="/tmp")
+anonymized_proc = factories.postgresql_proc(port="8765")
 anonymized = factories.postgresql("anonymized_proc")
 
 DUMP_PATH = "test_dump.sql"
@@ -80,9 +80,7 @@ def test_dump_and_load(original_db, anonymized):
 
 def test_load_anonymize_remove(dumped_db, anonymized):
     assert_db_empty(anonymized)
-    load_anonymize_remove(
-        DUMP_PATH, SCHEMA_PATH, leave_dump=False, db_args=ANONYMIZED_DB_ARGS
-    )
+    load_anonymize_remove(DUMP_PATH, SCHEMA_PATH, leave_dump=False, db_args=ANONYMIZED_DB_ARGS)
     assert_db_anonymized(anonymized)
 
 
@@ -134,6 +132,8 @@ def test_command_line_invokation(original_db, anonymized, monkeypatch):
             verbose=False,
             schema=SCHEMA_PATH,
             dump_file=DUMP_PATH,
+            disable_schema_changes=False,
+            skip_restore=False,
             **{
                 arg: ORIGINAL_DB_ARGS[arg]
                 for arg in ("dbname", "user", "host", "port", "password")
@@ -151,6 +151,8 @@ def test_command_line_invokation(original_db, anonymized, monkeypatch):
             leave_dump=False,
             schema=SCHEMA_PATH,
             dump_file=DUMP_PATH,
+            disable_schema_changes=False,
+            skip_restore=False,
             **{
                 arg: ANONYMIZED_DB_ARGS[arg]
                 for arg in ("dbname", "user", "host", "port", "password")

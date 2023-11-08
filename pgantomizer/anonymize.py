@@ -177,9 +177,7 @@ def check_schema(cursor, schema, db_args):
 
 
 def get_column_update(schema, table, column, data_type):
-    custom_rule = (
-        get_in(schema, [table, "custom_rules", column]) if schema[table] else None
-    )
+    custom_rule = get_in(schema, [table, "custom_rules", column]) if schema[table] else None
 
     if column == get_table_pk_name(schema, table) or (
         schema[table] and column in schema[table].get("raw", [])
@@ -192,9 +190,7 @@ def get_column_update(schema, table, column, data_type):
                     'Custom rule "{}" must provide a non-None value'.format(custom_rule)
                 )
             else:
-                return "{column} = '{value}'".format(
-                    column=column, value=custom_rule["value"]
-                )
+                return "{column} = '{value}'".format(column=column, value=custom_rule["value"])
         elif custom_rule and custom_rule not in CUSTOM_ANONYMIZATION_RULES:
             raise MissingAnonymizationRuleError(
                 'Custom rule "{}" is not defined'.format(custom_rule)
@@ -226,13 +222,9 @@ def anonymize_table(conn, cursor, schema, table, disable_schema_changes):
             cascade = " CASCADE"
 
         logging.debug(
-            "Running TRUNCATE{cascade} on {table} ...".format(
-                table=table, cascade=cascade
-            )
+            "Running TRUNCATE{cascade} on {table} ...".format(table=table, cascade=cascade)
         )
-        cursor.execute(
-            "TRUNCATE {table} {cascade}".format(table=table, cascade=cascade)
-        )
+        cursor.execute("TRUNCATE {table} {cascade}".format(table=table, cascade=cascade))
         return
 
     # Generate list of column_update SQL snippets for UPDATE
@@ -244,9 +236,7 @@ def anonymize_table(conn, cursor, schema, table, disable_schema_changes):
     updated_column_names = []
     for column_name, data_type in cursor.fetchall():
         if not disable_schema_changes:  # Bypass schema changes if explicitly requested
-            prepare_column_for_anonymization(
-                conn, cursor, table, column_name, data_type
-            )
+            prepare_column_for_anonymization(conn, cursor, table, column_name, data_type)
         column_update = get_column_update(schema, table, column_name, data_type)
         if column_update is not None:
             column_updates.append(column_update)
@@ -254,14 +244,12 @@ def anonymize_table(conn, cursor, schema, table, disable_schema_changes):
 
     # Process UPDATE if any column_updates requested
     if len(column_updates) > 0:
-        update_statement = (
-            "UPDATE {table} SET {column_updates_sql} {where_clause}".format(
-                table=table,
-                column_updates_sql=", ".join(column_updates),
-                where_clause="WHERE {}".format(
-                    schema[table].get("where", "TRUE") if schema[table] else "TRUE"
-                ),
-            )
+        update_statement = "UPDATE {table} SET {column_updates_sql} {where_clause}".format(
+            table=table,
+            column_updates_sql=", ".join(column_updates),
+            where_clause="WHERE {}".format(
+                schema[table].get("where", "TRUE") if schema[table] else "TRUE"
+            ),
         )
         logging.debug(
             "Running UPDATE on {} for columns {} ...".format(
@@ -281,9 +269,7 @@ def anonymize_db(schema, db_args, disable_schema_changes):
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type <> 'VIEW' ORDER BY table_name;"
             )
             for table_name in cursor.fetchall():
-                anonymize_table(
-                    conn, cursor, schema, table_name[0], disable_schema_changes
-                )
+                anonymize_table(conn, cursor, schema, table_name[0], disable_schema_changes)
             logging.debug("Anonymization complete!")
 
 
@@ -305,7 +291,9 @@ def load_anonymize_remove(
         try:
             load_db_to_new_instance(dump_file, db_args)
             anonymize_db(schema, db_args, disable_schema_changes)
-        except Exception:  # Any exception must result into dropping the schema to prevent sensitive data leakage
+        except (
+            Exception
+        ):  # Any exception must result into dropping the schema to prevent sensitive data leakage
             drop_schema(db_args)
             raise
         finally:
@@ -320,9 +308,7 @@ def main():
         epilog="Beware that all tables in the target DB are dropped "
         "prior to loading the dump and anonymization. See README.md for details.",
     )
-    parser.add_argument(
-        "-v", "--verbose", action="count", help="increase output verbosity"
-    )
+    parser.add_argument("-v", "--verbose", action="count", help="increase output verbosity")
     parser.add_argument(
         "-s",
         "--skip-restore",
@@ -363,9 +349,7 @@ def main():
         help="password of the Postgres user with access to the anonymized database",
         default="",
     )
-    parser.add_argument(
-        "--host", help="host where the DB is running", default="localhost"
-    )
+    parser.add_argument("--host", help="host where the DB is running", default="localhost")
     parser.add_argument("--port", help="port where the DB is running", default="5432")
 
     args = parser.parse_args()
@@ -374,6 +358,7 @@ def main():
     else:
         logging.basicConfig(format="%(levelname)s: %(message)s")
 
+    print(args)
     if not args.skip_restore and not os.path.isfile(args.dump_file):
         sys.exit('File with dump "{}" does not exist.'.format(args.dump_file))
 

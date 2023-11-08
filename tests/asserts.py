@@ -2,16 +2,16 @@ from psycopg2.extras import NamedTupleCursor
 
 
 def assert_customer_anonymized(customer, name, language, currency, ip):
-    assert customer.name == name
-    assert customer.language == language
-    assert customer.currency == currency
-    assert customer.ip == ip
+    assert customer[1] == name
+    assert customer[2] == language
+    assert customer[3] == currency
+    assert str(customer[4]) == ip
 
 
 def assert_address_anonymized(address, customer_id, address_line, country):
-    assert address.customer_id == customer_id
-    assert address.address_line == address_line
-    assert address.country == country
+    assert address[1] == customer_id
+    assert address[2] == address_line
+    assert address[3] == country
 
 
 def assert_db_empty(db):
@@ -21,7 +21,7 @@ def assert_db_empty(db):
 
 
 def assert_db_anonymized(db):
-    cursor = db.cursor(cursor_factory=NamedTupleCursor)
+    cursor = db.cursor()
     cursor.execute("SELECT * FROM customer;")
     customers = cursor.fetchall()
     assert_customer_anonymized(customers[0], "name_1", "fr", "LAT", "111.111.111.111")
