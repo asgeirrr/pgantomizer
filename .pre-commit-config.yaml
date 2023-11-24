@@ -1,10 +1,30 @@
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: v0.1.4
+  rev: v0.1.6
   hooks:
     # Run the linter.
     - id: ruff
       args: [ --fix ]
     # Run the formatter.
     - id: ruff-format
+- repo: local
+  hooks:
+  - id: commitizen-branch
+    name: commitizen conditionally check branch
+    description: >
+        Commitizen fails when there are no new commits. To overcome this, we created
+        tiny wrapper that verifies there are commits to check.
+
+        Original description from Commitizen:
+        Check all commit messages that are already on the current branch but not the
+        default branch on the origin repository. Useful for checking messages after
+        the fact (e.g., pre-push or in CI) without an expensive check of the entire
+        repository history.
+    entry: ./conditional-commitizen.sh
+    always_run: true
+    language: python
+    minimum_pre_commit_version: "1.4.3"
+    additional_dependencies: [
+        'commitizen',
+    ]

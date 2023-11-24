@@ -40,7 +40,7 @@ setup(
     ],
     tests_require=[
         "pytest",
-        "pytest-postgresql==1.3.0",
+        "pytest-postgresql",
         "pre-commit",
     ],
     entry_points={

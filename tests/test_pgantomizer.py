@@ -80,7 +80,9 @@ def test_dump_and_load(original_db, anonymized):
 
 def test_load_anonymize_remove(dumped_db, anonymized):
     assert_db_empty(anonymized)
-    load_anonymize_remove(DUMP_PATH, SCHEMA_PATH, leave_dump=False, db_args=ANONYMIZED_DB_ARGS)
+    load_anonymize_remove(
+        DUMP_PATH, SCHEMA_PATH, leave_dump=False, db_args=ANONYMIZED_DB_ARGS
+    )
     assert_db_anonymized(anonymized)
 
 

@@ -1,6 +1,3 @@
-from psycopg2.extras import NamedTupleCursor
-
-
 def assert_customer_anonymized(customer, name, language, currency, ip):
     assert customer[1] == name
     assert customer[2] == language
