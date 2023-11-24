@@ -1,0 +1,50 @@
+name: Run Tests & Deploy
+on: [push, pull_request]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -e '.'
+      - name: Install packages needed for CI
+        run: pip install pre-commit
+      - name: Lint all files
+        run: pre-commit run --all-files --show-diff-on-failure
+      - name: Run tests
+        run: python setup.py test
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PUBLISH_TOKEN }}
+      - name: Semantic release
+        uses: relekang/python-semantic-release@master
+        with:
+            # Personal Access Token that belongs to an admin of the repo must
+            # be set in PUBLISH_TOKEN secret to bypass `main` branch protection
+            github_token: ${{ secrets.PUBLISH_TOKEN }}
